@@ -1,6 +1,7 @@
 class AppException(Exception):
     pass
 
+
 class APIError(AppException):
     def __init__(self, service: str, status_code: int, message: str):
         self.service = service
