@@ -7,6 +7,7 @@ from pathlib import Path
 LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
 
+
 def setup_logger(
     name: str = "app",
     level: str = "INFO",
@@ -44,6 +45,7 @@ def setup_logger(
         logger.addHandler(file_handler)
 
     return logger
+
 
 # 预置一个全局 logger 实例（供其他模块导入使用）
 logger = setup_logger()
