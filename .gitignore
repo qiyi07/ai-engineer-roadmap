@@ -1,10 +1,43 @@
-# Python
+# Byte-compiled / cache files
 __pycache__/
 *.pyc
+*.pyo
+
+# Virtual environments
 .venv/
 venv/
-.env
+env/
+
+# Build artifacts
 dist/
 build/
 *.egg-info/
-.DS_Storeuv.lock 
+
+# Type checker / linter caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/*.log
+
+# Environment variables
+.env
+*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Database files
+*.db
+*.sqlite3
