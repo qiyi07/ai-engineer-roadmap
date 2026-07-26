@@ -1,4 +1,5 @@
-from src.repositories.memory_db import MessageRepository
+# from src.repositories.memory_db import MessageRepository
+from src.repositories.message_repo import MessageRepository
 from src.core.config import settings
 
 class ChatService:
