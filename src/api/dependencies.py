@@ -62,3 +62,5 @@ async def get_current_user(
         "id": int(user_id),
         "username": payload.get("username", "unknown")
     }
+# 临时存储验证码（开发用，生产环境应替换为 Redis）
+verification_codes = {}
