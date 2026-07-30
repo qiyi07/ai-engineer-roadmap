@@ -1,13 +1,12 @@
 from fastapi import FastAPI
-from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
+from src.api.rate_limit import _rate_limit_exceeded_handler, limiter
 from src.api.v1.endpoints import router
-from src.api.rate_limit import limiter, _rate_limit_exceeded_handler
 
 app = FastAPI(
-    title="AI Engineer Roadmap",
-    version="0.2.0",
-    description="W2: FastAPI 路由与参数实战 + 限流"
+    title="AI Engineer Roadmap", version="0.2.0", description="W2: FastAPI 路由与参数实战 + 限流"
 )
 
 # ---------- 限流配置 ----------
@@ -17,6 +16,7 @@ app.add_middleware(SlowAPIMiddleware)  # 注册限流中间件
 
 # ---------- 挂载路由 ----------
 app.include_router(router)
+
 
 # ---------- 根路径 ----------
 @app.get("/")
