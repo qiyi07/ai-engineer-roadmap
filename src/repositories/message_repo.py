@@ -1,7 +1,8 @@
-from sqlmodel import Session, select
-from src.models.db_models import Message
-from src.core.config import settings
 from sqlalchemy import create_engine
+from sqlmodel import Session, select
+
+from src.core.config import settings
+from src.models.db_models import Message
 
 # 引擎创建保持不变（不再每次创建 Session）
 engine = create_engine(
@@ -11,17 +12,18 @@ engine = create_engine(
 )
 
 
-
 class MessageRepository:
     @staticmethod
-    def save(session: Session, user_id: int, message: str, reply: str, temperature: float = 0.7) -> dict:
+    def save(
+        session: Session, user_id: int, message: str, reply: str, temperature: float = 0.7
+    ) -> dict:
         """接收外部传入的 session，由 FastAPI 管理生命周期"""
         db_msg = Message(
             user_id=user_id,
             message=message,
             reply=reply,
             temperature=temperature,
-            tokens_used=len(message.split()) * 2
+            tokens_used=len(message.split()) * 2,
         )
         session.add(db_msg)
         session.commit()
@@ -32,7 +34,7 @@ class MessageRepository:
             "message": db_msg.message,
             "reply": db_msg.reply,
             "created_at": db_msg.created_at.isoformat(),
-            "tokens_used": db_msg.tokens_used
+            "tokens_used": db_msg.tokens_used,
         }
 
     @staticmethod
@@ -51,7 +53,7 @@ class MessageRepository:
                 "message": msg.message,
                 "reply": msg.reply,
                 "created_at": msg.created_at.isoformat(),
-                "tokens_used": msg.tokens_used
+                "tokens_used": msg.tokens_used,
             }
             for msg in results
         ]

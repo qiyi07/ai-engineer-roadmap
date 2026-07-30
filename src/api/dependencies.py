@@ -1,8 +1,9 @@
-from fastapi import Depends, HTTPException, status, Header
 from typing import Optional
+
+from fastapi import Header, HTTPException, status
 from sqlmodel import Session
 
-from src.core.config import settings, Settings
+from src.core.config import Settings, settings
 from src.core.security import decode_access_token
 from src.repositories.message_repo import engine
 
@@ -23,9 +24,7 @@ def get_db():
         yield session
 
 
-async def get_current_user(
-    token: Optional[str] = Header(None, alias="Authorization")
-) -> dict:
+async def get_current_user(token: Optional[str] = Header(None, alias="Authorization")) -> dict:
     """
     依赖项：从 Authorization 头提取 JWT 令牌，验证并返回用户信息。
     格式要求：Authorization: Bearer <token>
@@ -58,9 +57,8 @@ async def get_current_user(
         )
 
     # 可在此处从数据库查询用户状态（如是否禁用），增强安全性
-    return {
-        "id": int(user_id),
-        "username": payload.get("username", "unknown")
-    }
+    return {"id": int(user_id), "username": payload.get("username", "unknown")}
+
+
 # 临时存储验证码（开发用，生产环境应替换为 Redis）
 verification_codes = {}

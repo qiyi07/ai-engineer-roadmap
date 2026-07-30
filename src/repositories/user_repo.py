@@ -1,6 +1,8 @@
 from sqlmodel import Session, select
-from src.models.db_models import User
+
 from src.core.security import get_password_hash, verify_password
+from src.models.db_models import User
+
 
 class UserRepository:
     @staticmethod
