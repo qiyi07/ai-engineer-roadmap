@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlmodel import Session
 
@@ -13,6 +14,7 @@ from src.core.security import create_access_token
 from src.repositories.user_repo import UserRepository
 from src.services.chat_service import ChatService
 from src.utils.email import send_verification_email
+from src.services.llm_service import chat_with_llm_stream
 
 # ---------- 路由实例 ----------
 router = APIRouter(prefix="/api/v1", tags=["AI服务"])
@@ -80,17 +82,17 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
     return {"access_token": token, "token_type": "bearer"}
 
 
-# ---------- 3. 对话（需要认证 + 限流 5次/分钟） ----------
+# ---------- 3. 对话（非流式，保存历史） ----------
 @router.post("/chat", response_model=ChatResponse)
 @limiter.limit("5/minute")
 async def chat_endpoint(
-    request: Request,  # 必须添加
+    request: Request,
     chat_req: ChatRequest,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """处理对话，限流 5 次/分钟"""
-    result = ChatService.process_message(
+    """非流式对话，回复完成后一次性返回，并保存历史记录"""
+    result = await ChatService.process_message(
         session=db,
         user_id=current_user["id"],
         message=chat_req.message,
@@ -104,35 +106,61 @@ async def chat_endpoint(
     )
 
 
-# ---------- 4. 历史记录（需要认证 + 限流 10次/分钟） ----------
+# ---------- 4. 流式对话（不保存历史，仅演示） ----------
+@router.post("/chat/stream")
+@limiter.limit("5/minute")
+async def chat_stream(
+    request: Request,
+    chat_req: ChatRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """流式对话，返回 Server-Sent Events (SSE)，不保存历史"""
+    async def generate():
+        async for chunk in chat_with_llm_stream(
+            user_message=chat_req.message,
+            temperature=chat_req.temperature,
+        ):
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+# ---------- 5. 历史记录（需要认证 + 限流 10次/分钟） ----------
 @router.get("/users/history")
 @limiter.limit("10/minute")
 async def get_history(
-    request: Request,  # 必须添加
+    request: Request,
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
     """获取历史记录，限流 10 次/分钟"""
-    history = ChatService.get_history(db, current_user["id"], limit)
+    history = await ChatService.get_history(db, current_user["id"], limit)
     return {"user_id": current_user["id"], "limit": limit, "history": history}
 
 
-# ---------- 5. 应用信息（公开） ----------
+# ---------- 6. 应用信息（公开） ----------
 @router.get("/info")
 def get_app_info():
     from src.core.config import settings
-
     return {"app_name": settings.app_name, "version": settings.app_version, "debug": settings.debug}
 
 
-# ---------- 6. 健康检查（公开） ----------
+# ---------- 7. 健康检查（公开） ----------
 @router.get("/health")
 def health_check():
     return {"status": "ok", "version": "v1"}
 
 
-# ---------- 7. 发送验证码 ----------
+# ---------- 8. 发送验证码 ----------
 @router.post("/send-verification")
 async def send_verification(req: EmailRequest):
     email = req.email
@@ -142,7 +170,7 @@ async def send_verification(req: EmailRequest):
     return {"message": "Verification code sent (check console)"}
 
 
-# ---------- 8. 校验验证码 ----------
+# ---------- 9. 校验验证码 ----------
 @router.post("/verify-email")
 def verify_email(req: VerifyEmailRequest):
     email = req.email
@@ -156,6 +184,8 @@ def verify_email(req: VerifyEmailRequest):
         raise HTTPException(status_code=400, detail="Invalid code")
     return {"message": "Email verified successfully"}
 
+
+# ---------- 10. W3 预览（占位） ----------
 @router.get("/preview/w3")
 def w3_preview():
     return {"message": "W3 准备就绪，即将接入大模型！", "status": "ready"}
