@@ -20,6 +20,10 @@ class Settings(BaseSettings):
         default="deepseek-chat",
         alias="OPENAI_MODEL"
     )
+    system_prompt: str = Field(
+        default="You are a helpful AI assistant.",
+        alias="SYSTEM_PROMPT"
+    )
 
     secret_key: str = Field(..., alias="SECRET_KEY")
 
