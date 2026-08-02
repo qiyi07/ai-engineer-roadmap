@@ -22,13 +22,15 @@
 # # ---------- 根路径 ----------
 # @app.get("/")
 # def root():
-#     return {"message": "✅ W2 Started! Visit /docs for Swagger UI (Rate limiting enabled)"}
+#     return {"message": "W2 Started! Visit /docs for Swagger UI (Rate limiting enabled)"}
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from src.api.v1.endpoints import router
 from src.api.rate_limit import limiter
+from fastapi.openapi.utils import get_openapi
 
 app = FastAPI(
     title="AI Engineer Roadmap",
@@ -49,9 +51,10 @@ app.include_router(router)
 def root():
     return {"message": "✅ W2 Started! Visit /docs for Swagger UI (Rate limiting enabled)"}
 
-# ---------- 新增：为 Swagger UI 添加 Authorize 按钮 ----------
-from fastapi.openapi.utils import get_openapi
+# ---------- 挂载静态文件（前端聊天页面） ----------
+app.mount("/static", StaticFiles(directory="static", html=True), name="static")
 
+# ---------- 自定义 OpenAPI（为 Swagger 添加 Bearer 认证按钮） ----------
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -61,7 +64,6 @@ def custom_openapi():
         description=app.description,
         routes=app.routes,
     )
-    # 定义 Bearer 认证方案
     openapi_schema["components"] = openapi_schema.get("components", {})
     openapi_schema["components"]["securitySchemes"] = {
         "BearerAuth": {
@@ -70,7 +72,6 @@ def custom_openapi():
             "bearerFormat": "JWT",
         }
     }
-    # 全局应用安全（所有路由默认需要认证，但公开接口可单独豁免）
     openapi_schema["security"] = [{"BearerAuth": []}]
     app.openapi_schema = openapi_schema
     return app.openapi_schema
