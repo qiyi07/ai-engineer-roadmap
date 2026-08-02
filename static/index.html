@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI 聊天助手</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f7f7f8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 720px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+            padding: 24px;
+        }
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .subtitle {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        #chat-box {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            background: #fafafa;
+            margin-bottom: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .msg {
+            padding: 10px 14px;
+            border-radius: 12px;
+            max-width: 80%;
+            word-wrap: break-word;
+            line-height: 1.5;
+            font-size: 15px;
+        }
+        .msg.user {
+            background: #2563eb;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        .msg.assistant {
+            background: #e5e7eb;
+            color: #1f2937;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        .msg .cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1em;
+            background: #1f2937;
+            animation: blink 0.8s step-end infinite;
+            vertical-align: text-bottom;
+            margin-left: 2px;
+        }
+        @keyframes blink {
+            0%,
+            100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0;
+            }
+        }
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+        .input-row input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 10px;
+            font-size: 15px;
+            outline: none;
+            transition: border 0.2s;
+        }
+        .input-row input:focus {
+            border-color: #2563eb;
+        }
+        .input-row button {
+            padding: 12px 24px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .input-row button:hover {
+            background: #1d4ed8;
+        }
+        .input-row button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .status {
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: 8px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 AI 聊天助手</h1>
+        <div class="subtitle">基于 DeepSeek · 流式输出</div>
+
+        <div id="chat-box"></div>
+
+        <div class="input-row">
+            <input type="text" id="msg-input" placeholder="输入消息..." />
+            <button id="send-btn">发送</button>
+        </div>
+        <div class="status" id="status">就绪</div>
+    </div>
+
+    <script>
+        // ---------- 配置 ----------
+        const API_BASE = "http://127.0.0.1:8000/api/v1";
+        // 请在控制台设置 token：localStorage.setItem('token', '你的token')
+        let token = localStorage.getItem("token") || "";
+
+        if (!token) {
+            const userToken = prompt("请输入你的 JWT Token（从 /login 或 /register 获取）:");
+            if (userToken) {
+                token = userToken;
+                localStorage.setItem("token", token);
+            }
+        }
+
+        const chatBox = document.getElementById("chat-box");
+        const input = document.getElementById("msg-input");
+        const sendBtn = document.getElementById("send-btn");
+        const statusEl = document.getElementById("status");
+
+        let isStreaming = false;
+
+        // ---------- 辅助函数 ----------
+        function addMessage(content, role) {
+            const div = document.createElement("div");
+            div.className = `msg ${role}`;
+            div.textContent = content;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return div;
+        }
+
+        function setStatus(text) {
+            statusEl.textContent = text;
+        }
+
+        // ---------- 发送消息 ----------
+        async function sendMessage() {
+            const message = input.value.trim();
+            if (!message || isStreaming) return;
+
+            input.value = "";
+            sendBtn.disabled = true;
+            isStreaming = true;
+            setStatus("AI 正在思考...");
+
+            // 添加用户消息
+            addMessage(message, "user");
+
+            // 创建 AI 消息占位
+            const aiMsgDiv = document.createElement("div");
+            aiMsgDiv.className = "msg assistant";
+            aiMsgDiv.textContent = "";
+            chatBox.appendChild(aiMsgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // 添加光标
+            const cursor = document.createElement("span");
+            cursor.className = "cursor";
+            aiMsgDiv.appendChild(cursor);
+
+            try {
+                const response = await fetch(`${API_BASE}/chat/stream`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ message, temperature: 0.7 }),
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || "请求失败");
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = "";
+                let fullText = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop() || "";
+
+                    for (const line of lines) {
+                        if (line.startsWith("data: ")) {
+                            const data = line.slice(6);
+                            if (data === "[DONE]") {
+                                // 移除光标
+                                cursor.remove();
+                                setStatus("完成");
+                                continue;
+                            }
+                            // 追加文本
+                            const textNode = document.createTextNode(data);
+                            aiMsgDiv.insertBefore(textNode, cursor);
+                            fullText += data;
+                            chatBox.scrollTop = chatBox.scrollHeight;
+                        }
+                    }
+                }
+
+                // 确保光标移除
+                if (cursor.parentNode) cursor.remove();
+                setStatus("已完成");
+
+            } catch (err) {
+                setStatus(`❌ 错误: ${err.message}`);
+                aiMsgDiv.textContent = `[错误] ${err.message}`;
+                if (cursor.parentNode) cursor.remove();
+            }
+
+            sendBtn.disabled = false;
+            isStreaming = false;
+        }
+
+        // ---------- 绑定事件 ----------
+        sendBtn.addEventListener("click", sendMessage);
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") sendMessage();
+        });
+
+        // 初始化状态
+        setStatus("输入消息开始聊天");
+    </script>
+</body>
+</html>
