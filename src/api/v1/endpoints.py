@@ -1,7 +1,7 @@
 import random
 import time
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -12,6 +12,7 @@ from src.api.dependencies import get_current_user, get_db, verification_codes
 from src.api.rate_limit import limiter
 from src.core.security import create_access_token
 from src.repositories.user_repo import UserRepository
+from src.repositories.session_repo import SessionRepository
 from src.services.chat_service import ChatService
 from src.utils.email import send_verification_email
 from src.services.llm_service import chat_with_llm_stream
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/api/v1", tags=["AI服务"])
 # ---------- 请求/响应模型 ----------
 class ChatRequest(BaseModel):
     message: str
+    session_id: Optional[int] = None  #可选，不传则使用默认会话
     temperature: float = 0.7
 
 
@@ -58,6 +60,18 @@ class VerifyEmailRequest(BaseModel):
     code: str
 
 
+#会话管理模型
+class SessionCreate(BaseModel):
+    title: Optional[str] = "新对话"
+
+
+class SessionResponse(BaseModel):
+    id: int
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+
 # ---------- 1. 注册 ----------
 @router.post("/register", response_model=TokenResponse)
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
@@ -82,7 +96,57 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
     return {"access_token": token, "token_type": "bearer"}
 
 
-# ---------- 3. 对话（非流式，保存历史） ----------
+# ---------- 3. 创建会话 ----------
+@router.post("/sessions", response_model=SessionResponse)
+def create_session(
+    data: SessionCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """创建新会话"""
+    session = SessionRepository.create(db, current_user["id"], data.title)
+    return SessionResponse(
+        id=session.id,
+        title=session.title,
+        created_at=session.created_at,
+        updated_at=session.updated_at,
+    )
+
+
+# ---------- 4. 列表会话 ----------
+@router.get("/sessions", response_model=List[SessionResponse])
+def list_sessions(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """获取当前用户的所有会话"""
+    sessions = SessionRepository.get_by_user(db, current_user["id"])
+    return [
+        SessionResponse(
+            id=s.id,
+            title=s.title,
+            created_at=s.created_at,
+            updated_at=s.updated_at,
+        )
+        for s in sessions
+    ]
+
+
+# ---------- 5. 删除会话 ----------
+@router.delete("/sessions/{session_id}")
+def delete_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """删除指定会话（会同时删除该会话下的所有消息）"""
+    success = SessionRepository.delete(db, session_id, current_user["id"])
+    if not success:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"message": "Session deleted"}
+
+
+# ---------- 6. 对话（非流式，保存历史） ----------
 @router.post("/chat", response_model=ChatResponse)
 @limiter.limit("5/minute")
 async def chat_endpoint(
@@ -91,10 +155,21 @@ async def chat_endpoint(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """非流式对话，回复完成后一次性返回，并保存历史记录"""
+    """非流式对话，支持多会话。不传 session_id 时使用最近会话"""
+    # 确定 session_id
+    session_id = chat_req.session_id
+    if session_id is None:
+        session_id = await ChatService.get_or_create_default_session(db, current_user["id"])
+    else:
+        # 验证该会话属于当前用户
+        sess = SessionRepository.get_by_id(db, session_id, current_user["id"])
+        if not sess:
+            raise HTTPException(status_code=404, detail="Session not found")
+
     result = await ChatService.process_message(
         session=db,
         user_id=current_user["id"],
+        session_id=session_id,
         message=chat_req.message,
         temperature=chat_req.temperature,
     )
@@ -106,7 +181,7 @@ async def chat_endpoint(
     )
 
 
-# ---------- 4. 流式对话（不保存历史，仅演示） ----------
+# ---------- 7. 流式对话（不保存历史，仅演示） ----------
 @router.post("/chat/stream")
 @limiter.limit("5/minute")
 async def chat_stream(
@@ -133,34 +208,45 @@ async def chat_stream(
     )
 
 
-# ---------- 5. 历史记录（需要认证 + 限流 10次/分钟） ----------
+# ---------- 8. 历史记录（按会话） ----------
 @router.get("/users/history")
 @limiter.limit("10/minute")
 async def get_history(
     request: Request,
-    limit: int = Query(10, ge=1, le=100),
+    session_id: Optional[int] = None,
+    limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """获取历史记录，限流 10 次/分钟"""
-    history = await ChatService.get_history(db, current_user["id"], limit)
-    return {"user_id": current_user["id"], "limit": limit, "history": history}
+    """获取指定会话的历史记录。不传 session_id 时使用最近会话"""
+    if session_id is None:
+        sessions = SessionRepository.get_by_user(db, current_user["id"])
+        if not sessions:
+            return {"session_id": None, "limit": limit, "history": []}
+        session_id = sessions[0].id
+    else:
+        sess = SessionRepository.get_by_id(db, session_id, current_user["id"])
+        if not sess:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+    history = await ChatService.get_history(db, session_id, limit)
+    return {"session_id": session_id, "limit": limit, "history": history}
 
 
-# ---------- 6. 应用信息（公开） ----------
+# ---------- 9. 应用信息（公开） ----------
 @router.get("/info")
 def get_app_info():
     from src.core.config import settings
     return {"app_name": settings.app_name, "version": settings.app_version, "debug": settings.debug}
 
 
-# ---------- 7. 健康检查（公开） ----------
+# ---------- 10. 健康检查（公开） ----------
 @router.get("/health")
 def health_check():
     return {"status": "ok", "version": "v1"}
 
 
-# ---------- 8. 发送验证码 ----------
+# ---------- 11. 发送验证码 ----------
 @router.post("/send-verification")
 async def send_verification(req: EmailRequest):
     email = req.email
@@ -170,7 +256,7 @@ async def send_verification(req: EmailRequest):
     return {"message": "Verification code sent (check console)"}
 
 
-# ---------- 9. 校验验证码 ----------
+# ---------- 12. 校验验证码 ----------
 @router.post("/verify-email")
 def verify_email(req: VerifyEmailRequest):
     email = req.email
@@ -185,7 +271,7 @@ def verify_email(req: VerifyEmailRequest):
     return {"message": "Email verified successfully"}
 
 
-# ---------- 10. W3 预览（占位） ----------
+# ---------- 13. W3 预览（占位） ----------
 @router.get("/preview/w3")
 def w3_preview():
     return {"message": "W3 准备就绪，即将接入大模型！", "status": "ready"}
