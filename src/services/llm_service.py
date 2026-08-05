@@ -77,3 +77,22 @@ async def chat_with_llm_complete(
         "input": user_message,
         "history": history or [],
     })
+async def generate_session_title(user_message: str) -> str:
+    """根据用户的第一条消息，生成简短的会话标题（≤20字）"""
+    prompt = f"""请根据以下用户的第一条消息，生成一个简短的会话标题（不超过20个字）：
+    
+用户消息：{user_message}
+
+标题："""
+    
+    # 使用非流式调用
+    title = await chat_with_llm_complete(
+        user_message=prompt,
+        system_prompt="你是一个标题生成助手，只输出标题，不要有其他内容。",
+        temperature=0.3,
+    )
+    # 清理换行和多余空格，限制长度
+    title = title.strip()[:30]
+    if not title or len(title) < 2:
+        title = "新对话"
+    return title

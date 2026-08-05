@@ -16,6 +16,7 @@ from src.repositories.session_repo import SessionRepository
 from src.services.chat_service import ChatService
 from src.utils.email import send_verification_email
 from src.services.llm_service import chat_with_llm_stream
+from src.utils.logger import logger  # ✅ 新增导入
 
 # ---------- 路由实例 ----------
 router = APIRouter(prefix="/api/v1", tags=["AI服务"])
@@ -166,13 +167,19 @@ async def chat_endpoint(
         if not sess:
             raise HTTPException(status_code=404, detail="Session not found")
 
-    result = await ChatService.process_message(
-        session=db,
-        user_id=current_user["id"],
-        session_id=session_id,
-        message=chat_req.message,
-        temperature=chat_req.temperature,
-    )
+    # 异常捕获 + 日志记录
+    try:
+        result = await ChatService.process_message(
+            session=db,
+            user_id=current_user["id"],
+            session_id=session_id,
+            message=chat_req.message,
+            temperature=chat_req.temperature,
+        )
+    except Exception as e:
+        logger.error(f"对话处理失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="AI 服务暂时不可用")
+
     return ChatResponse(
         reply=result["reply"],
         timestamp=datetime.fromisoformat(result["created_at"]),
