@@ -145,3 +145,39 @@ ai-engineer-roadmap/
 4. **限流保护**：`/chat` 限制 5 次/分钟，防止 API 滥用。
 5. **Alembic 迁移**：代码改表结构后，`alembic revision --autogenerate` + `alembic upgrade head` 自动同步数据库。
 6. **邮箱验证**：注册时发送 6 位验证码，有效期 10 分钟（内存存储，生产可用 Redis）。
+
+## Week 3 复盘（7/31 – 8/6）
+
+### 🎯 本周核心目标
+- [x] 接入 DeepSeek 大模型（LangChain + OpenAI 兼容接口）
+- [x] 实现流式对话（SSE）与前端打字机效果
+- [x] 多会话支持（创建、切换、删除会话）
+- [x] 会话标题自动生成（基于首条消息）
+- [x] 云数据库切换（Supabase）
+- [x] 部署到 Railway（公网可访问）
+- [x] 异常处理与结构化日志
+- [x] LeetCode 二叉树遍历（前、中、后序）累计 6 题
+
+### 🛠️ 本周新增工具链
+| 工具 | 用途 |
+|------|------|
+| DeepSeek API | 大模型服务（性价比高，兼容 OpenAI） |
+| LangChain | Prompt 模板、LCEL 编排、输出解析 |
+| Supabase | 云 PostgreSQL（含 SSL） |
+| Railway | 项目部署（公网 URL） |
+| fastapi-mail | 发送验证邮件（备用） |
+
+### 📂 项目结构变化（新增）
+- `src/models/db_models.py` 增加 `ChatSession` 表
+- `src/repositories/session_repo.py`：会话 CRUD
+- `src/services/llm_service.py`：LLM 调用与标题生成
+- `static/sessions.html`（或 index.html）：多会话前端页面
+- `Dockerfile`：容器化部署
+
+### 🧠 核心技术收获
+1. **多会话上下文隔离**：每个会话独立存储消息，LLM 调用时仅加载当前会话的历史。
+2. **流式输出的工程实现**：FastAPI `StreamingResponse` + 异步生成器，配合前端 EventSource。
+3. **LCEL 链式调用**：`prompt | model | parser` 构建可复用的处理链。
+4. **自动标题生成**：首次对话时用 LLM 生成标题，提升用户体验。
+5. **云数据库迁移**：从本地 PostgreSQL 切换到 Supabase（仅改连接字符串）。
+6. **部署流程**：通过 Railway 一键部署，环境变量统一管理。
