@@ -16,7 +16,8 @@ from src.repositories.session_repo import SessionRepository
 from src.services.chat_service import ChatService
 from src.utils.email import send_verification_email
 from src.services.llm_service import chat_with_llm_stream
-from src.utils.logger import logger  # ✅ 新增导入
+from src.utils.logger import logger
+from src.services.rag_service import rag_answer
 
 # ---------- 路由实例 ----------
 router = APIRouter(prefix="/api/v1", tags=["AI服务"])
@@ -72,6 +73,15 @@ class SessionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+class RAGRequest(BaseModel):
+    query: str
+    top_k: Optional[int] = 3
+    temperature: Optional[float] = 0.3
+
+class RAGResponse(BaseModel):
+    answer: str
+    sources: List[dict]
+    has_answer: bool
 
 # ---------- 1. 注册 ----------
 @router.post("/register", response_model=TokenResponse)
@@ -282,3 +292,24 @@ def verify_email(req: VerifyEmailRequest):
 @router.get("/preview/w3")
 def w3_preview():
     return {"message": "W3 准备就绪，即将接入大模型！", "status": "ready"}
+
+
+# ---------- 14. RAG 知识库问答 ----------
+@router.post("/rag", response_model=RAGResponse)
+@limiter.limit("5/minute")
+async def rag_endpoint(
+    request: Request,
+    rag_req: RAGRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """RAG 知识库问答，返回带引用的答案"""
+    result = await rag_answer(
+        query=rag_req.query,
+        top_k=rag_req.top_k or 3,
+        temperature=rag_req.temperature or 0.3,
+    )
+    return RAGResponse(
+        answer=result["answer"],
+        sources=result["sources"],
+        has_answer=result["has_answer"],
+    )

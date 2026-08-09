@@ -41,6 +41,27 @@ def search(query: str, top_k: int = 3) -> List[dict]:
         for doc, score in results
     ]
 
+def search_with_threshold(
+    query: str,
+    top_k: int = 3,
+    score_threshold: float = 0.5,
+) -> List[dict]:
+    """
+    向量检索 + 阈值过滤
+    返回结果中 score > score_threshold 的文档块
+    """
+    results = vector_store.similarity_search_with_score(query, k=top_k)
+    filtered = [
+        {
+            "content": doc.page_content,
+            "score": score,
+            "metadata": doc.metadata,
+        }
+        for doc, score in results
+        if score >= score_threshold
+    ]
+    return filtered
+
 
 def delete_collection() -> None:
     """清空集合（谨慎使用）"""
