@@ -3,6 +3,7 @@ from langchain_community.vectorstores import PGVector
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from src.core.config import settings
 from src.rag.text_splitter import split_text
+from functools import lru_cache
 
 # ---------- 初始化 Embedding 模型 ----------
 embeddings = HuggingFaceEmbeddings(
@@ -114,3 +115,9 @@ def add_documents_batch(
         )
         all_ids.extend(ids)
     return all_ids
+
+
+@lru_cache(maxsize=128)
+def cached_search(query: str, top_k: int = 3) -> List[dict]:
+    """带缓存的检索（用于高频相似查询）"""
+    return search(query, top_k=top_k)

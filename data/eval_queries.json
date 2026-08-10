@@ -1,0 +1,17 @@
+[
+    {
+        "query": "什么是监督学习？",
+        "expected_sources": ["sample.txt"],
+        "expected_keywords": ["带标签", "分类", "回归"]
+    },
+    {
+        "query": "深度学习有什么应用？",
+        "expected_sources": ["sample.txt"],
+        "expected_keywords": ["图像识别", "自然语言处理", "神经网络"]
+    },
+    {
+        "query": "人工智能和机器学习的关系是什么？",
+        "expected_sources": ["sample.txt"],
+        "expected_keywords": ["人工智能", "机器学习", "实现"]
+    }
+]

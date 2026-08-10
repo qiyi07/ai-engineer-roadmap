@@ -2,7 +2,7 @@ from typing import List, Dict, Any, Optional
 from src.rag.vector_store import search_with_threshold
 from src.services.llm_service import chat_with_llm_complete
 from src.core.config import settings
-
+from src.rag.vector_store import cached_search
 def format_context(chunks: List[dict]) -> str:
     """将检索到的文档块格式化为上下文文本"""
     context_parts = []
@@ -51,7 +51,8 @@ async def rag_answer(
     }
     """
     # 1. 检索相关文档块
-    chunks = search_with_threshold(query, top_k=top_k, score_threshold=score_threshold)
+    # 
+    chunks = cached_search(query, top_k=top_k)
 
     # 2. 如果无有效检索结果
     if not chunks:
