@@ -46,4 +46,4 @@ try:
     with open("missing.txt", "r", encoding="utf-8") as f:
         content = f.read()
 except FileNotFoundError:
-    print("⚠️ 文件不存在，跳过读取")
+    print("文件不存在，跳过读取")

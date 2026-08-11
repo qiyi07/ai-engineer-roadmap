@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 def split_text(
     text: str,
@@ -8,7 +8,7 @@ def split_text(
     separators: List[str] = ["\n\n", "\n", "。", "！", "？", " ", ""],
 ) -> List[Dict[str, Any]]:
     """
-    将长文本切分为多个块
+    将长文本切分为多个块（chunk）
     返回: [{"content": "...", "index": 0, "chunk_size": 500}, ...]
     """
     splitter = RecursiveCharacterTextSplitter(

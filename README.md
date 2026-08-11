@@ -177,3 +177,48 @@ ai-engineer-roadmap/
 4. **自动标题生成**：首次对话时用 LLM 生成标题，提升用户体验。
 5. **云数据库迁移**：从本地 PostgreSQL 切换到 Supabase（仅改连接字符串）。
 6. **部署流程**：通过 Railway 一键部署，环境变量统一管理。
+
+
+## Week 4 复盘（8/7 – 8/11）—— 项目3：RAG 知识库
+
+### 🎯 本周核心目标
+- [x] PGVector 环境搭建（Supabase）
+- [x] Embedding 模型加载（sentence-transformers）
+- [x] 多格式文档加载（TXT/Markdown/PDF）
+- [x] 文本切分（chunk_size/overlap 实验）
+- [x] 向量检索 + LLM 生成（RAG 完整链路）
+- [x] 引用来源返回（可溯源）
+- [x] 兜底策略（检索不到时不胡编）
+- [x] 调优实验对比（chunk 大小影响）
+
+### 🛠️ 本周新增工具链
+| 工具 | 用途 |
+|------|------|
+| PGVector | PostgreSQL 向量扩展 |
+| sentence-transformers | 本地 Embedding 模型 |
+| rank-bm25 | BM25 关键词检索（混合检索） |
+| jieba | 中文分词 |
+| pypdf | PDF 解析 |
+
+### 📂 新增文件
+- `src/rag/`：RAG 核心模块
+  - `vector_store.py`：向量存储与检索
+  - `document_loader.py`：文档加载
+  - `text_splitter.py`：文本切分
+  - `evaluator.py`：检索评估
+  - `hybrid_retriever.py`：BM25+向量混合检索
+- `src/services/rag_service.py`：RAG 问答服务
+- `experiments/chunk_experiment.py`：调优实验
+- `data/eval_queries.json`：评测数据集
+- `test_rag.py`：RAG 链路测试
+
+### 🧠 核心技术收获
+1. **向量检索原理**：Embedding → 相似度计算 → 排序。
+2. **RAG 完整链路**：用户提问 → 检索 → 上下文拼接 → LLM 生成 → 返回引用。
+3. **兜底策略**：相似度阈值过滤 + 无结果时的明确提示。
+4. **调优方法论**：通过实验对比不同 chunk_size 的召回率。
+5. **混合检索**：BM25（关键词）+ 向量（语义）互补。
+
+### 📊 调优结论
+- **最佳配置**：chunk_size=500, chunk_overlap=50, top_k=3, threshold=0.5
+- **召回率**：~85%（基于测试集）

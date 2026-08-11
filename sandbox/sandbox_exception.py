@@ -36,12 +36,12 @@ def process_with_retry(prompt: str, max_retries: int = 3):
     for attempt in range(1, max_retries + 1):
         try:
             result = call_llm_api(prompt)
-            print(f"✅ 成功: {result}")
+            print(f"成功: {result}")
             return result
         except APIError as e:
             print(f"⚠️ 第 {attempt} 次尝试失败: {e}")
             if attempt == max_retries:
-                print("❌ 达到最大重试次数，抛出最终异常")
+                print("达到最大重试次数，抛出最终异常")
                 raise   # 重新抛出，让上层处理
             # 模拟退避等待（面试常问）
             import time
