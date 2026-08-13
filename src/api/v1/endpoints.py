@@ -18,6 +18,8 @@ from src.utils.email import send_verification_email
 from src.services.llm_service import chat_with_llm_stream
 from src.utils.logger import logger
 from src.services.rag_service import rag_answer
+from src.projects.resume_optimizer.service import parse_resume, analyze_jd, tailor_cv
+from src.projects.resume_optimizer.schemas import Resume, MatchAnalysis, TailoredCVResponse
 
 # ---------- 路由实例 ----------
 router = APIRouter(prefix="/api/v1", tags=["AI服务"])
@@ -82,6 +84,20 @@ class RAGResponse(BaseModel):
     answer: str
     sources: List[dict]
     has_answer: bool
+
+
+class ResumeTextInput(BaseModel):
+    text: str
+
+class JDTextInput(BaseModel):
+    text: str
+    title: Optional[str] = None
+    company: Optional[str] = None
+
+class TailorRequest(BaseModel):
+    resume_text: str
+    jd_text: str
+    style: Optional[str] = "professional"
 
 # ---------- 1. 注册 ----------
 @router.post("/register", response_model=TokenResponse)
@@ -313,3 +329,32 @@ async def rag_endpoint(
         sources=result["sources"],
         has_answer=result["has_answer"],
     )
+
+# ---------- 14. 简历解析 ----------
+@router.post("/resume/parse")
+async def parse_resume_endpoint(
+    data: ResumeTextInput,
+    current_user: dict = Depends(get_current_user),
+):
+    resume = await parse_resume(data.text)
+    return resume.model_dump()
+
+# ---------- 15. JD 分析 ----------
+@router.post("/jd/analyze")
+async def analyze_jd_endpoint(
+    data: JDTextInput,
+    current_user: dict = Depends(get_current_user),
+):
+    # 需要先解析简历，简化为传入完整 resume 对象
+    # 应从数据库读取，先留占位
+    return {"message": "需要传入 resume 对象"}
+
+# ---------- 16. 定制化简历 ----------
+@router.post("/cv/tailor")
+async def tailor_cv_endpoint(
+    data: TailorRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    resume = await parse_resume(data.resume_text)
+    result = await tailor_cv(resume, data.jd_text)
+    return result.model_dump()

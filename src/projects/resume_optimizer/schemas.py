@@ -45,3 +45,14 @@ class MatchAnalysis(BaseModel):
     highlight_strengths: List[str]
     suggestion: str
     recommend_apply: bool
+
+class TailoredCVRequest(BaseModel):
+    resume: Resume
+    jd_text: str
+    style: Optional[str] = "professional"  # professional / creative / concise
+
+class TailoredCVResponse(BaseModel):
+    summary: str
+    highlighted_skills: List[str]
+    bullet_points: List[str]
+    full_cv: str
