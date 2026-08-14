@@ -19,6 +19,7 @@ dependencies = [
     "langchain-core>=1.5.1",
     "langchain-openai>=1.4.1",
     "langchain-text-splitters>=1.1.2",
+    "mcp>=2.0.0",
     "mypy>=2.3.0",
     "openai>=2.49.0",
     "passlib[bcrypt]>=1.7.4",
