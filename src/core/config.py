@@ -25,7 +25,17 @@ class Settings(BaseSettings):
         alias="SYSTEM_PROMPT"
     )
 
-    secret_key: str = Field(..., alias="SECRET_KEY")
+    secret_key: str = Field(..., alias="SECRET_KEY"
+    )
+
+        # 向量数据库配置
+    vector_collection_default: str = Field("docs", alias="VECTOR_COLLECTION_DEFAULT")
+    chunk_size_default: int = Field(500, alias="CHUNK_SIZE_DEFAULT")
+    chunk_overlap_default: int = Field(50, alias="CHUNK_OVERLAP_DEFAULT")
+    
+    # RAG 配置
+    rag_top_k_default: int = Field(3, alias="RAG_TOP_K_DEFAULT")
+    rag_score_threshold: float = Field(0.5, alias="RAG_SCORE_THRESHOLD")
 
     class Config:
         env_file = ".env"

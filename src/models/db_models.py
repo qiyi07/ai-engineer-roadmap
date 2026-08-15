@@ -42,5 +42,25 @@ class Message(SQLModel, table=True):
     tokens_used: int = 0
     created_at: datetime = Field(default_factory=datetime.now)
 
-    # 关系
-    session: "ChatSession" = Relationship(back_populates="messages")
+class ResumeRecord(SQLModel, table=True):
+    """简历记录表"""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    resume_json: str = Field(nullable=False)  # JSON 存储完整 Resume 对象
+    created_at: datetime = Field(default_factory=datetime.now)
+
+class JDAnalysisRecord(SQLModel, table=True):
+    """JD 分析记录表"""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    jd_text: str = Field(nullable=False)
+    analysis_result: str = Field(nullable=False)  # JSON 存储 MatchAnalysis
+    created_at: datetime = Field(default_factory=datetime.now)
+
+class TailoredCVRecord(SQLModel, table=True):
+    """定制简历记录表"""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    jd_text: str = Field(nullable=False)
+    tailored_result: str = Field(nullable=False)  # JSON 存储 TailoredCVResponse
+    created_at: datetime = Field(default_factory=datetime.now)

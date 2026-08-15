@@ -20,6 +20,7 @@ from src.utils.logger import logger
 from src.services.rag_service import rag_answer
 from src.projects.resume_optimizer.service import parse_resume, analyze_jd, tailor_cv
 from src.projects.resume_optimizer.schemas import Resume, MatchAnalysis, TailoredCVResponse
+from src.agents.mcp_demo import MCPServer
 
 # ---------- 路由实例 ----------
 router = APIRouter(prefix="/api/v1", tags=["AI服务"])
@@ -28,7 +29,7 @@ router = APIRouter(prefix="/api/v1", tags=["AI服务"])
 # ---------- 请求/响应模型 ----------
 class ChatRequest(BaseModel):
     message: str
-    session_id: Optional[int] = None  #可选，不传则使用默认会话
+    session_id: Optional[int] = None
     temperature: float = 0.7
 
 
@@ -64,7 +65,7 @@ class VerifyEmailRequest(BaseModel):
     code: str
 
 
-#会话管理模型
+# 会话管理模型
 class SessionCreate(BaseModel):
     title: Optional[str] = "新对话"
 
@@ -75,10 +76,12 @@ class SessionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class RAGRequest(BaseModel):
     query: str
     top_k: Optional[int] = 3
     temperature: Optional[float] = 0.3
+
 
 class RAGResponse(BaseModel):
     answer: str
@@ -89,15 +92,29 @@ class RAGResponse(BaseModel):
 class ResumeTextInput(BaseModel):
     text: str
 
+
 class JDTextInput(BaseModel):
     text: str
     title: Optional[str] = None
     company: Optional[str] = None
+    resume_text: str  # 必须携带简历文本
+
 
 class TailorRequest(BaseModel):
     resume_text: str
     jd_text: str
     style: Optional[str] = "professional"
+
+
+class MCPRequest(BaseModel):
+    tool: str
+    params: dict = {}
+
+
+class KnowledgeBaseCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
 
 # ---------- 1. 注册 ----------
 @router.post("/register", response_model=TokenResponse)
@@ -183,17 +200,14 @@ async def chat_endpoint(
     current_user: dict = Depends(get_current_user),
 ):
     """非流式对话，支持多会话。不传 session_id 时使用最近会话"""
-    # 确定 session_id
     session_id = chat_req.session_id
     if session_id is None:
         session_id = await ChatService.get_or_create_default_session(db, current_user["id"])
     else:
-        # 验证该会话属于当前用户
         sess = SessionRepository.get_by_id(db, session_id, current_user["id"])
         if not sess:
             raise HTTPException(status_code=404, detail="Session not found")
 
-    # 异常捕获 + 日志记录
     try:
         result = await ChatService.process_message(
             session=db,
@@ -330,31 +344,89 @@ async def rag_endpoint(
         has_answer=result["has_answer"],
     )
 
-# ---------- 14. 简历解析 ----------
+
+# ---------- 15. 简历解析 ----------
 @router.post("/resume/parse")
 async def parse_resume_endpoint(
     data: ResumeTextInput,
     current_user: dict = Depends(get_current_user),
 ):
+    """解析简历文本为结构化数据"""
     resume = await parse_resume(data.text)
     return resume.model_dump()
 
-# ---------- 15. JD 分析 ----------
+
+# ---------- 16. JD 分析 ----------
 @router.post("/jd/analyze")
 async def analyze_jd_endpoint(
     data: JDTextInput,
     current_user: dict = Depends(get_current_user),
 ):
-    # 需要先解析简历，简化为传入完整 resume 对象
-    # 应从数据库读取，先留占位
-    return {"message": "需要传入 resume 对象"}
+    """分析职位描述与简历的匹配度"""
+    # 解析简历（从请求中获取 resume_text）
+    resume = await parse_resume(data.resume_text)
+    result = await analyze_jd(data.text, resume)
+    return result.model_dump()
 
-# ---------- 16. 定制化简历 ----------
+
+# ---------- 17. 定制化简历 ----------
 @router.post("/cv/tailor")
 async def tailor_cv_endpoint(
     data: TailorRequest,
     current_user: dict = Depends(get_current_user),
 ):
+    """根据 JD 定制化简历"""
     resume = await parse_resume(data.resume_text)
     result = await tailor_cv(resume, data.jd_text)
     return result.model_dump()
+
+
+# ---------- 18. MCP 工具调用 ----------
+@router.post("/mcp/call")
+async def mcp_call_endpoint(
+    req: MCPRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """代理 MCP 工具调用（模拟）"""
+    server = MCPServer()
+    result = server.handle_request({"tool": req.tool, "params": req.params})
+    return result
+
+
+# ---------- 19. 创建知识库 ----------
+@router.post("/kb/create")
+async def create_knowledge_base(
+    data: KnowledgeBaseCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """创建新的知识库集合（对应 PGVector collection）"""
+    from src.rag.vector_store import get_vector_store
+    get_vector_store(data.name)  # 初始化集合
+    return {"message": f"知识库 '{data.name}' 创建成功"}
+
+
+# ---------- 20. 导入文档到知识库 ----------
+@router.post("/kb/{kb_name}/ingest")
+async def ingest_documents(
+    kb_name: str,
+    files: List[str],
+    current_user: dict = Depends(get_current_user),
+):
+    """向指定知识库导入文档"""
+    from src.rag.document_loader import load_document
+    from src.rag.vector_store import add_documents_to_collection
+    from src.rag.text_splitter import split_text
+
+    all_texts = []
+    all_metadatas = []
+    for file_path in files:
+        content = load_document(file_path)
+        chunks = split_text(content, chunk_size=500, chunk_overlap=50)
+        all_texts.extend([c["content"] for c in chunks])
+        all_metadatas.extend([
+            {"source": file_path, "chunk_index": c["index"]}
+            for c in chunks
+        ])
+
+    ids = add_documents_to_collection(all_texts, kb_name, all_metadatas)
+    return {"message": f"导入 {len(ids)} 个文档块到 '{kb_name}'"}
